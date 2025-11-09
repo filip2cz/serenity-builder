@@ -15,7 +15,7 @@ jobs:
 
       - name: Clone SerenityOS repo
         run: |
-          git clone git@github.com:SerenityOS/serenity.git
+          git clone https://github.com/SerenityOS/serenity.git
 
       - name: Install dependencies
         run: |
