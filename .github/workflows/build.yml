@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions: write-all
     needs: build
     steps:
@@ -30,8 +30,15 @@ jobs:
           cd serenity
           bash ./Meta/serenity.sh build
 
+      - name: Build SerenityOS image
+        run: |
+          cd serenity
+          bash ./Meta/serenity.sh image
+          ninja -C Build/x86_64 limine-image
+
       - name: Create new release and upload iso
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create --draft REPLACEME *.iso
+          DATE=$(date +%F)
+          gh release create $DATE qemu_image
