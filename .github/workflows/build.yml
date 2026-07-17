@@ -9,6 +9,10 @@ on:
       - main
       - master
 
+permissions:
+  # Grant write permissions to the token to allow creating releases
+  contents: write
+
 jobs:
   build:
     name: Build and Release
