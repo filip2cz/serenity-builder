@@ -49,19 +49,23 @@ jobs:
         # Generate the current date (YYYY-MM-DD) to use as the release name and tag
         run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
-      - name: Compress QEMU Image
-        # Compress the raw disk image into a zip archive for the release
+      - name: Convert and Compress Images
+        # Convert raw ext2 image to qcow2 format for VMs, then zip them separately
         run: |
           cd Build/x86_64/
-          zip -r serenity-qemu-image-${{ env.DATE }}.zip _disk_image
+          qemu-img convert -f raw -O qcow2 _disk_image serenity-image.qcow2
+          zip -r serenity-raw-image-${{ env.DATE }}.zip _disk_image
+          zip -r serenity-qcow2-image-${{ env.DATE }}.zip serenity-image.qcow2
           
       - name: Create Release and Upload
-        # Create a GitHub Release and upload the generated zip file
+        # Create a GitHub Release and upload the generated zip files
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.DATE }}
           name: ${{ env.DATE }}
-          files: Build/x86_64/serenity-qemu-image-${{ env.DATE }}.zip
+          files: |
+            Build/x86_64/serenity-raw-image-${{ env.DATE }}.zip
+            Build/x86_64/serenity-qcow2-image-${{ env.DATE }}.zip
         env:
           # Provide the token for authentication to create the release
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
