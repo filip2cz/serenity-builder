@@ -1,8 +1,13 @@
 name: Build SerenityOS QEMU Image
 
 on:
-  # Umožňuje spustit workflow ručně přes webové rozhraní GitHubu (v záložce Actions)
+  # Trigger the workflow manually from the GitHub UI
   workflow_dispatch:
+  # Trigger the workflow on push events to the main or master branch
+  push:
+    branches:
+      - main
+      - master
 
 jobs:
   build:
@@ -10,43 +15,49 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout repository
+      - name: Checkout SerenityOS repository
         uses: actions/checkout@v4
+        with:
+          # Force checking out the SerenityOS repository instead of the current one
+          repository: SerenityOS/serenity
+          # Fetch only the latest commit to speed up the checkout process
+          fetch-depth: 1
 
       - name: Install Dependencies
-        # Nainstaluje závislosti podle BuildInstructions.md (včetně fuse2fs a gcc-14)
+        # Install all required packages as described in BuildInstructions.md
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake curl libmpfr-dev libmpc-dev libgmp-dev e2fsprogs ninja-build qemu-system-gui qemu-system-x86 qemu-utils ccache rsync unzip texinfo libssl-dev zlib1g-dev fuse2fs gcc-14 g++-14
         
       - name: Set environment variables
-        # Nastaví vynuceně překladač na GCC-14 pro podporu C++26
+        # Force the build system to use GCC 14 for C++26 support
         run: |
           echo "CC=gcc-14" >> $GITHUB_ENV
           echo "CXX=g++-14" >> $GITHUB_ENV
 
       - name: Build QEMU Image
-        # Zkompiluje toolchain a vytvoří obraz disku (výchozí architektura x86_64 a překladač GNU)
+        # Build the toolchain and the OS disk image for x86_64 architecture using GNU
         run: |
           ./Meta/serenity.sh image x86_64 GNU
 
       - name: Get current date
         id: date
-        # Získá aktuální datum (ve formátu RRRR-MM-DD), které použije pro název releasu
+        # Generate the current date (YYYY-MM-DD) to use as the release name and tag
         run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
       - name: Compress QEMU Image
-        # Zabalí vygenerovaný obraz disku (image) do ZIP archivu pro nahrání do Releases
+        # Compress the raw disk image into a zip archive for the release
         run: |
           cd Build/x86_64/
           zip -r serenity-qemu-image-${{ env.DATE }}.zip _disk_image
           
       - name: Create Release and Upload
-        # Vytvoří Release s aktuálním datem a nahraje do něj zabalený obraz disku
+        # Create a GitHub Release and upload the generated zip file
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.DATE }}
           name: ${{ env.DATE }}
           files: Build/x86_64/serenity-qemu-image-${{ env.DATE }}.zip
         env:
+          # Provide the token for authentication to create the release
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
