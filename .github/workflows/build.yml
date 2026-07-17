@@ -1,44 +1,52 @@
-name: Build
+name: Build SerenityOS QEMU Image
 
 on:
+  # Umožňuje spustit workflow ručně přes webové rozhraní GitHubu (v záložce Actions)
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    permissions: write-all
-    needs: build
+    name: Build and Release
+    runs-on: ubuntu-24.04
+
     steps:
-      - name: Install git
-        run: |
-          sudo apt update && sudo apt install git
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Clone SerenityOS repo
+      - name: Install Dependencies
+        # Nainstaluje závislosti podle BuildInstructions.md (včetně fuse2fs a gcc-14)
         run: |
-          git clone https://github.com/SerenityOS/serenity.git
-
-      - name: Install dependencies
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake curl libmpfr-dev libmpc-dev libgmp-dev e2fsprogs ninja-build qemu-system-gui qemu-system-x86 qemu-utils ccache rsync unzip texinfo libssl-dev zlib1g-dev fuse2fs gcc-14 g++-14
+        
+      - name: Set environment variables
+        # Nastaví vynuceně překladač na GCC-14 pro podporu C++26
         run: |
-          sudo apt install build-essential cmake curl libmpfr-dev libmpc-dev libgmp-dev e2fsprogs ninja-build qemu-system-gui qemu-system-x86 qemu-utils ccache rsync unzip texinfo libssl-dev zlib1g-dev
+          echo "CC=gcc-14" >> $GITHUB_ENV
+          echo "CXX=g++-14" >> $GITHUB_ENV
 
-      - name: Install GCC 13
+      - name: Build QEMU Image
+        # Zkompiluje toolchain a vytvoří obraz disku (výchozí architektura x86_64 a překladač GNU)
         run: |
-          sudo apt install gcc-13 g++-13
+          ./Meta/serenity.sh image x86_64 GNU
 
-      - name: Compile SerenityOS
+      - name: Get current date
+        id: date
+        # Získá aktuální datum (ve formátu RRRR-MM-DD), které použije pro název releasu
+        run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+      - name: Compress QEMU Image
+        # Zabalí vygenerovaný obraz disku (image) do ZIP archivu pro nahrání do Releases
         run: |
-          cd serenity
-          bash ./Meta/serenity.sh build
-
-      - name: Build SerenityOS image
-        run: |
-          cd serenity
-          bash ./Meta/serenity.sh image
-          ninja -C Build/x86_64 limine-image
-
-      - name: Create new release and upload iso
+          cd Build/x86_64/
+          zip -r serenity-qemu-image-${{ env.DATE }}.zip _disk_image
+          
+      - name: Create Release and Upload
+        # Vytvoří Release s aktuálním datem a nahraje do něj zabalený obraz disku
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.DATE }}
+          name: ${{ env.DATE }}
+          files: Build/x86_64/serenity-qemu-image-${{ env.DATE }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          DATE=$(date +%F)
-          gh release create $DATE qemu_image
