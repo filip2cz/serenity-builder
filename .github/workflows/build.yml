@@ -40,7 +40,9 @@ jobs:
           echo "CXX=g++-14" >> $GITHUB_ENV
 
       - name: Build QEMU Image
-        # Build the toolchain and the OS disk image for x86_64 architecture using GNU
+        # Build the bootable OS disk image using the Limine bootloader
+        env:
+          SERENITY_RUN: limine
         run: |
           ./Meta/serenity.sh image x86_64 GNU
 
@@ -50,7 +52,7 @@ jobs:
         run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
       - name: Convert and Compress Images
-        # Convert raw ext2 image to qcow2 format for VMs, then zip them separately
+        # Convert raw image to qcow2 format for VMs, then zip them separately
         run: |
           cd Build/x86_64/
           qemu-img convert -f raw -O qcow2 _disk_image serenity-image.qcow2
