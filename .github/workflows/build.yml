@@ -22,16 +22,14 @@ jobs:
       - name: Checkout SerenityOS repository
         uses: actions/checkout@v4
         with:
-          # Force checking out the SerenityOS repository instead of the current one
           repository: SerenityOS/serenity
-          # Fetch only the latest commit to speed up the checkout process
           fetch-depth: 1
 
       - name: Install Dependencies
-        # Install all required packages as described in BuildInstructions.md
+        # Added grub-pc-bin, grub-common, mtools, parted and xorriso for building the bootable partition
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake curl libmpfr-dev libmpc-dev libgmp-dev e2fsprogs ninja-build qemu-system-gui qemu-system-x86 qemu-utils ccache rsync unzip texinfo libssl-dev zlib1g-dev fuse2fs gcc-14 g++-14
+          sudo apt-get install -y build-essential cmake curl libmpfr-dev libmpc-dev libgmp-dev e2fsprogs ninja-build qemu-system-gui qemu-system-x86 qemu-utils ccache rsync unzip texinfo libssl-dev zlib1g-dev fuse2fs gcc-14 g++-14 grub-pc-bin grub-common mtools parted xorriso
         
       - name: Set environment variables
         # Force the build system to use GCC 14 for C++26 support
@@ -39,12 +37,11 @@ jobs:
           echo "CC=gcc-14" >> $GITHUB_ENV
           echo "CXX=g++-14" >> $GITHUB_ENV
 
-      - name: Build QEMU Image
-        # Build the bootable OS disk image using the Limine bootloader
-        env:
-          SERENITY_RUN: limine
+      - name: Build Bootable GRUB Image
+        # Build the grub-image target instead of limine because the upstream limine script fails
         run: |
-          ./Meta/serenity.sh image x86_64 GNU
+          ./Meta/serenity.sh build x86_64 GNU
+          ninja -C Build/x86_64 grub-image
 
       - name: Get current date
         id: date
@@ -52,15 +49,14 @@ jobs:
         run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
       - name: Convert and Compress Images
-        # Convert raw image to qcow2 format for VMs, then zip them separately
+        # The grub-image target creates a file named grub_disk_image
         run: |
           cd Build/x86_64/
-          qemu-img convert -f raw -O qcow2 _disk_image serenity-image.qcow2
-          zip -r serenity-raw-image-${{ env.DATE }}.zip _disk_image
+          qemu-img convert -f raw -O qcow2 grub_disk_image serenity-image.qcow2
+          zip -r serenity-raw-image-${{ env.DATE }}.zip grub_disk_image
           zip -r serenity-qcow2-image-${{ env.DATE }}.zip serenity-image.qcow2
           
       - name: Create Release and Upload
-        # Create a GitHub Release and upload the generated zip files
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.DATE }}
@@ -69,5 +65,4 @@ jobs:
             Build/x86_64/serenity-raw-image-${{ env.DATE }}.zip
             Build/x86_64/serenity-qcow2-image-${{ env.DATE }}.zip
         env:
-          # Provide the token for authentication to create the release
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
